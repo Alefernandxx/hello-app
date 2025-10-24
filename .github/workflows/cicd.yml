@@ -36,10 +36,9 @@ jobs:
         with:
           context: .
           push: true
-          # ⬇️ SUBSTITUA AQUI ⬇️
           tags: alefernandxx/hello-app:${{ env.TAG }}
-          # ⬆️ SUBSTITUA AQUI ⬆️
-          outputs: type=registry,name=seu-usuario-dockerhub/hello-app,tag=${{ env.TAG }}
+          # --- CORREÇÃO 1 AQUI ---
+          outputs: type=registry,name=alefernandxx/hello-app,tag=${{ env.TAG }}
 
   update-manifests:
     needs: build-and-push
@@ -56,9 +55,7 @@ jobs:
       - name: Checkout repositório de manifestos
         uses: actions/checkout@v3
         with:
-          # ⬇️ SUBSTITUA AQUI (ex: ale123/hello-manifests) ⬇️
           repository: Alefernandxx/hello-manifests
-          # ⬆️ SUBSTITUA AQUI ⬆️
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ref: main
 
@@ -66,10 +63,10 @@ jobs:
         run: |
           NEW_TAG_WITH_DIGEST="${{ needs.build-and-push.outputs.image_tag }}"
           NEW_TAG=$(echo $NEW_TAG_WITH_DIGEST | cut -d'@' -f1 | rev | cut -d':' -f1 | rev)
-
-          # ⬇️ SUBSTITUA AQUI ⬇️
-          sed -i "s|image: alefernandxx-dockerhub/hello-app:.*|image: seu-usuario-dockerhub/hello-app:${NEW_TAG}|" deployment.yaml
-          # ⬆️ SUBSTITUA AQUI ⬆️
+          
+          # --- CORREÇÃO 2 AQUI ---
+          # Procura por "alefernandxx/hello-app:.*" e substitui por "alefernandxx/hello-app:<nova_tag>"
+          sed -i "s|image: alefernandxx/hello-app:.*|image: alefernandxx/hello-app:${NEW_TAG}|" deployment.yaml
 
       - name: Fazer commit e push da alteração
         run: |
