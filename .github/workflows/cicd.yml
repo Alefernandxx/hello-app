@@ -1,0 +1,84 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.docker_build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate image tag (SHA)
+        id: image_tag
+        run: echo "TAG=sha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          # ⬇️ SUBSTITUA AQUI ⬇️
+          tags: alefernandxx/hello-app:${{ env.TAG }}
+          # ⬆️ SUBSTITUA AQUI ⬆️
+          outputs: type=registry,name=seu-usuario-dockerhub/hello-app,tag=${{ env.TAG }}
+
+  update-manifests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Carregar chave SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Adicionar host do GitHub ao known_hosts
+        run: ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout repositório de manifestos
+        uses: actions/checkout@v3
+        with:
+          # ⬇️ SUBSTITUA AQUI (ex: ale123/hello-manifests) ⬇️
+          repository: Alefernandxx/hello-manifests
+          # ⬆️ SUBSTITUA AQUI ⬆️
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ref: main
+
+      - name: Atualizar tag da imagem no deployment.yaml
+        run: |
+          NEW_TAG_WITH_DIGEST="${{ needs.build-and-push.outputs.image_tag }}"
+          NEW_TAG=$(echo $NEW_TAG_WITH_DIGEST | cut -d'@' -f1 | rev | cut -d':' -f1 | rev)
+
+          # ⬇️ SUBSTITUA AQUI ⬇️
+          sed -i "s|image: alefernandxx-dockerhub/hello-app:.*|image: seu-usuario-dockerhub/hello-app:${NEW_TAG}|" deployment.yaml
+          # ⬆️ SUBSTITUA AQUI ⬆️
+
+      - name: Fazer commit e push da alteração
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions-bot@github.com"
+          git add deployment.yaml
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "CI: Atualiza imagem para ${{ env.TAG }}"
+            git push origin main
+          else
+            echo "Nenhuma mudança na tag da imagem."
+          fi
