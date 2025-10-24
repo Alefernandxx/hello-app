@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 app = FastAPI()
 @app.get("/")
+# ...
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Meu CI/CD com ArgoCD funciona!"} [cite: 67]
+# ...
